@@ -128,6 +128,12 @@
     .hidden {
       display: none !important;
     }
+
+    #scrapingState {
+      margin-top: 10px;
+      font-size: 12px;
+      color: rgba(255, 255, 255, 0.8);
+    }
   </style>
 </head>
 <body>
@@ -139,6 +145,7 @@
     <div><strong>Status:</strong> <span id="status">Ready</span></div>
     <div><strong>Found:</strong> <span id="profileCount">0</span> profiles</div>
     <div id="currentPage" style="display: none;"><strong>Current Page:</strong> <span id="pageNumber">1</span></div>
+    <div id="scrapingState" class="hidden"><strong>State:</strong> <span id="stateMessage">Idle</span></div>
   </div>
 
   <div class="progress" id="progressInfo">
@@ -151,6 +158,12 @@
   </button>
 
   <div class="button-group hidden" id="controlButtons">
+    <button id="pauseScraping" class="button button-primary">
+      ⏸️ Pause
+    </button>
+    <button id="resumeScraping" class="button button-primary hidden">
+      ▶️ Resume
+    </button>
     <button id="stopScraping" class="button button-stop">
       ⏹️ Stop
     </button>

@@ -1,12 +1,13 @@
 {
   "manifest_version": 3,
   "name": "LinkedIn URL Collector",
-  "version": "4.3",
+  "version": "4.5",
   "description": "Collects LinkedIn profile URLs from search results and saves them to profiles.csv",
   
   "permissions": [
     "activeTab",
-    "downloads"
+    "downloads",
+    "storage"
   ],
   
   "host_permissions": [

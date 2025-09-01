@@ -1,15 +1,3 @@
-2025/08/29-16:42:45.367 3ab0 Reusing MANIFEST D:\LinkedInScrapper\linkedin_scraper_starter\temp_chrome_profile\Default\Session Storage/MANIFEST-000001
-2025/08/29-16:42:45.370 3ab0 Recovering log #67
-2025/08/29-16:42:45.372 3ab0 Reusing old log D:\LinkedInScrapper\linkedin_scraper_starter\temp_chrome_profile\Default\Session Storage/000067.log 
-2025/08/29-16:59:42.792 210c Level-0 table #71: started
-2025/08/29-16:59:42.831 210c Level-0 table #71: 18238 bytes OK
-2025/08/29-16:59:42.876 210c Delete type=0 #67
-2025/08/29-16:59:42.880 210c Compacting 4@0 + 1@1 files
-2025/08/29-16:59:43.030 210c Generated table #72@0: 2195 keys, 32594 bytes
-2025/08/29-16:59:43.030 210c Compacted 4@0 + 1@1 files => 32594 bytes
-2025/08/29-16:59:43.055 210c compacted to: files[ 0 1 1 0 0 0 0 ]
-2025/08/29-16:59:43.058 210c Delete type=2 #59
-2025/08/29-16:59:43.058 210c Delete type=2 #61
-2025/08/29-16:59:43.058 210c Delete type=2 #65
-2025/08/29-16:59:43.058 210c Delete type=2 #68
-2025/08/29-16:59:43.058 210c Delete type=2 #71
+2025/09/01-12:44:32.111 4fe8 Reusing MANIFEST D:\LinkedInScrapper\linkedin_scraper_starter\temp_chrome_profile\Default\Session Storage/MANIFEST-000001
+2025/09/01-12:44:32.129 4fe8 Recovering log #70
+2025/09/01-12:44:32.245 4fe8 Reusing old log D:\LinkedInScrapper\linkedin_scraper_starter\temp_chrome_profile\Default\Session Storage/000070.log 
