@@ -1,14 +1,86 @@
-// ---------------------------
-// Guardrails & configuration
-// ---------------------------
-const MIN_DELAY_SECONDS = 3;
-const MAX_DELAY_SECONDS = 4;
+const MIN_DELAY_SECONDS = 2;  
+const MAX_DELAY_SECONDS = 4; 
 
-// Utility functions
 function humanDelay() {
-    const delay = Math.random() * (MAX_DELAY_SECONDS - MIN_DELAY_SECONDS) + MIN_DELAY_SECONDS;
-    console.log(`Waiting ${delay.toFixed(1)} seconds...`);
-    return new Promise(resolve => setTimeout(resolve, delay * 1000));
+    // Much shorter main delays (2-5 seconds instead of 5-12)
+    const delay = Math.random() * (5 - 2) + 2;
+    
+    // Reduce chance and duration of extra pause (5% chance instead of 10%)
+    const extraPause = Math.random() < 0.05 ? Math.random() * 3 + 2 : 0;
+    const totalDelay = delay + extraPause;
+
+    console.log(`⏱️ Human delay: ${totalDelay.toFixed(1)} seconds...`);
+
+    return new Promise(resolve => {
+        // Less frequent mouse simulation (every 2 seconds instead of 1)
+        const mouseInterval = setInterval(() => {
+            simulateMouseMovement();
+        }, 2000);
+
+        setTimeout(() => {
+            clearInterval(mouseInterval);
+            resolve();
+        }, totalDelay * 1000);
+    });
+}
+
+async function smartHumanBehavior() {
+    if (Math.random() < 0.7) {
+        await humanScrolling();
+    }
+    
+    if (Math.random() < 0.6) {
+        return 'detailed'; 
+    } else {
+        console.log("🚀 Quick scan mode");
+        return 'quick'; 
+    }
+}
+
+async function humanScrolling() {
+    const scrollHeight = document.body.scrollHeight;
+    const viewportHeight = window.innerHeight;
+
+    // Reduce scroll count (1-3 instead of 2-5)
+    const scrollCount = Math.floor(Math.random() * 3) + 1;
+
+    for (let i = 0; i < scrollCount; i++) {
+        const scrollPercent = Math.random() * 0.8;
+        const scrollTo = scrollHeight * scrollPercent;
+
+        window.scrollTo({
+            top: scrollTo,
+            behavior: 'smooth'
+        });
+
+        // Shorter pauses between scrolls (300-800ms instead of 500-1500ms)
+        const pauseTime = Math.random() * 500 + 300;
+        await new Promise(resolve => setTimeout(resolve, pauseTime));
+
+        console.log(`   📜 Human scroll ${i + 1}/${scrollCount} to ${Math.round(scrollPercent * 100)}%`);
+    }
+
+    // Reduce scroll-to-top time
+    if (Math.random() < 0.3) {
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+        await new Promise(resolve => setTimeout(resolve, 400)); // Reduced from 800ms
+    }
+}
+
+function randomViewDuration(sectionType = 'default') {
+    const durations = {
+        'profile': [800, 1500],     // Reduced from 2-4s to 0.8-1.5s
+        'experience': [1500, 3000], // Reduced from 3-6s to 1.5-3s
+        'about': [1200, 2500],      // Reduced from 2-5s to 1.2-2.5s  
+        'education': [800, 1800],   // Added education with 0.8-1.8s
+        'default': [500, 1500]      // Reduced from 1-3s to 0.5-1.5s
+    };
+
+    const [min, max] = durations[sectionType] || durations.default;
+    const duration = Math.random() * (max - min) + min;
+    
+    console.log(`⏱️ Viewing ${sectionType} section for ${(duration/1000).toFixed(1)}s`);
+    return duration;
 }
 
 function safeText(element) {
@@ -442,6 +514,7 @@ async function extractLinkedInProfile() {
     }
 
     // Extract experience and current position
+    await new Promise(resolve => setTimeout(resolve, randomViewDuration('experience')));
     const experienceData = await extractExperience();
     if (experienceData["Experience"]) {
         data["Experience"] = experienceData["Experience"];
@@ -453,9 +526,11 @@ async function extractLinkedInProfile() {
     }
 
     // Extract education
+    await new Promise(resolve => setTimeout(resolve, randomViewDuration('education')));
     data["Education"] = await extractEducation();
 
     // Extract about section
+    await new Promise(resolve => setTimeout(resolve, randomViewDuration('about')));
     data["About"] = await extractAboutSection();
     data["Profile Url"] = formatProfileUrl(window.location.href);
     return data;
@@ -463,46 +538,56 @@ async function extractLinkedInProfile() {
 
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (request.action === "scrapeProfile") {
-        console.log(`Scraping profile: ${window.location.href}`);
-        extractLinkedInProfile().then(profile => {
-            const columnOrder = [
-                "Name", "Designation", "Current Position", "Location", "City", "State", "Country",
-                "Experience", "Education", "About", "Profile Url"
-            ];
-            const orderedProfile = {};
-            for (const col of columnOrder) {
-                orderedProfile[col] = profile[col] || "";
-            }
+        console.log(`🔍 Starting human-like profile analysis: ${window.location.href}`);
 
-            chrome.runtime.sendMessage({
-                action: "profileScraped",
-                profile: orderedProfile,
-                url: window.location.href
-            });
-            sendResponse({ status: "completed" });
-        }).catch(error => {
-            console.log(`Error scraping profile: ${error}`);
-            const columnOrder = [
-                "Name", "Designation", "Current Position", "Location", "City", "State", "Country",
-                "Experience", "Education", "About", "Profile Url"
-            ];
-            const errorProfile = {};
-            for (const col of columnOrder) {
-                if (col === "Profile Url") {
-                    errorProfile[col] = window.location.href;
-                } else if (col === "Name") {
-                    errorProfile[col] = `ERROR: ${error.toString()}`;
-                } else {
-                    errorProfile[col] = "";
+        (async () => {
+            try {
+                const initialDelay = 2000 + (Math.random() * 1000); // 2-3 seconds
+                console.log(`⏳ Initial page load wait: ${(initialDelay / 1000).toFixed(1)}s`);
+                await new Promise(resolve => setTimeout(resolve, initialDelay));
+
+                console.log(`📜 Simulating human browsing...`);
+                await humanScrolling();
+
+                await humanDelay();
+
+                if (Math.random() < 0.3) {
+                    console.log(`👆 Simulating section interaction...`);
+                    const sections = document.querySelectorAll('section[data-section]');
+                    if (sections.length > 0) {
+                        const randomSection = sections[Math.floor(Math.random() * sections.length)];
+                        randomSection.dispatchEvent(new Event('mouseenter'));
+                        await new Promise(resolve => setTimeout(resolve, 500));
+                    }
                 }
+
+                console.log(`✅ Starting data extraction...`);
+                const profile = await extractLinkedInProfile();
+
+                await humanDelay();
+
+                const columnOrder = [
+                    "Name", "Designation", "Current Position", "Location", "City", "State", "Country",
+                    "Experience", "Education", "About", "Profile Url"
+                ];
+                const orderedProfile = {};
+                for (const col of columnOrder) {
+                    orderedProfile[col] = profile[col] || "";
+                }
+
+                chrome.runtime.sendMessage({
+                    action: "profileScraped",
+                    profile: orderedProfile,
+                    url: window.location.href
+                });
+                sendResponse({ status: "completed" });
+
+            } catch (error) {
+                console.log(`❌ Error during human-like scraping: ${error}`);
+                sendResponse({ status: "error", error: error.toString() });
             }
-            chrome.runtime.sendMessage({
-                action: "profileScraped",
-                profile: errorProfile,
-                url: window.location.href
-            });
-            sendResponse({ status: "error", error: error.toString() });
-        });
-        return true; // Keep message channel open for async response
+        })();
+
+        return true;
     }
 });

@@ -539,13 +539,12 @@ function scrapeNextProfile() {
                             console.log("✅ Scrape command sent successfully");
                         }
                     });
-                }, 2000);
+                }, 500);
             }
         };
 
         chrome.tabs.onUpdated.addListener(currentTabListener);
 
-        // FIXED: Improved timeout handling
         setTimeout(() => {
             if (currentTabListener) {
                 chrome.tabs.onUpdated.removeListener(currentTabListener);
@@ -559,7 +558,7 @@ function scrapeNextProfile() {
 
                 handleProfileResult(timeoutProfile, url);
             }
-        }, 30000);
+        }, 3000);
     });
 }
 

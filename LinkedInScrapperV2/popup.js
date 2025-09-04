@@ -162,7 +162,6 @@ function extractLinkedInUrls() {
       continue;
     }
 
-    // ADDED: Check if profile is already scraped (has data in key columns)
     const hasExistingData = checkIfRowAlreadyScraped(row, headers);
     if (hasExistingData) {
       console.log(`✅ Row ${i}: Already scraped, skipping`);
@@ -352,7 +351,6 @@ document.getElementById("sheetUrl").addEventListener("change", async (e) => {
   }
 });
 
-// FIXED: Proper async handling for enrich button
 async function handleEnrichButton() {
   console.log("🚀 Enrich button clicked, current state:", currentScrapingState);
 
@@ -362,7 +360,6 @@ async function handleEnrichButton() {
     return;
   }
 
-  // Check if we should resume or start fresh
   if (currentScrapingState === "paused") {
     console.log("▶️ Resuming paused scraping...");
     updateStatus("Resuming scraping...");
@@ -382,7 +379,6 @@ async function handleEnrichButton() {
     return;
   }
 
-  // Start fresh scraping
   const urls = extractLinkedInUrls();
   if (urls.length === 0) {
     updateStatus("No valid LinkedIn URLs found", true);
@@ -401,7 +397,6 @@ async function handleEnrichButton() {
 
     console.log("📤 Sending message to background script...");
 
-    // FIXED: Proper promise-based message handling
     const response = await new Promise((resolve, reject) => {
       chrome.runtime.sendMessage({
         action: "startScraping",
@@ -432,7 +427,6 @@ async function handleEnrichButton() {
   }
 }
 
-// Message listener for background script updates
 chrome.runtime.onMessage.addListener((request) => {
   console.log("📥 Message received from background:", request);
 
@@ -506,13 +500,11 @@ chrome.runtime.onMessage.addListener((request) => {
 document.addEventListener('DOMContentLoaded', () => {
   console.log("📱 DOM loaded - Setting up event listeners");
 
-  // FIXED: Use the proper async handler
   const enrichBtn = document.getElementById("enrichBtn");
   if (enrichBtn) {
     enrichBtn.addEventListener("click", handleEnrichButton);
   }
 
-  // Pause/Resume button handler
   const pauseBtn = document.getElementById("pauseBtn");
   if (pauseBtn) {
     pauseBtn.addEventListener("click", async () => {
@@ -538,7 +530,6 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // Push button handler
   const pushBtn = document.getElementById("pushBtn");
   if (pushBtn) {
     pushBtn.addEventListener("click", async () => {
@@ -560,19 +551,16 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // Download button handler
   const downloadBtn = document.getElementById("downloadBtn");
   if (downloadBtn) {
     downloadBtn.addEventListener("click", downloadResults);
   }
 
-  // Clear button handler
   const clearBtn = document.getElementById("clearBtn");
   if (clearBtn) {
     clearBtn.addEventListener("click", clearResults);
   }
 
-  // Auto-push interval change handler
   const autoPushSelect = document.getElementById("autoPushInterval");
   if (autoPushSelect) {
     autoPushSelect.addEventListener("change", async (e) => {
