@@ -1,0 +1,36 @@
+{
+  "manifest_version": 3,
+  "name": "LinkedIn Enrichment",
+  "version": "1.5",
+  "description": "Enrich LinkedIn data from Google Sheets",
+  "action": {
+    "default_popup": "popup.html"
+  },
+  "oauth2": {
+  "client_id": "782044237037-47bhoo6r33grovhanh9u61bjuq6kbje8.apps.googleusercontent.com",
+  "scopes": [
+    "https://www.googleapis.com/auth/spreadsheets"
+  ]
+},
+  "permissions": [
+    "activeTab",
+    "tabs",
+    "storage",
+    "downloads",
+    "identity"
+  ],
+  "host_permissions": [
+    "https://www.linkedin.com/*",
+    "https://docs.google.com/*"
+  ],
+  "content_scripts": [
+    {
+      "matches": ["https://www.linkedin.com/*"],
+      "js": ["content.js"],
+      "run_at": "document_end"
+    }
+  ],
+  "background": {
+    "service_worker": "background.js"
+  }
+}

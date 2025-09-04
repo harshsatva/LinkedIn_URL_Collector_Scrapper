@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <title>LinkedIn Enrichment</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+
+<body>
+  <div class="container">
+    <h2>LinkedIn Enrichment</h2>
+
+    <label for="sheetUrl">Spreadsheet URL</label>
+    <div class="row">
+      <input type="text" id="sheetUrl" placeholder="Enter public link">
+      <span class="status">loading..</span>
+    </div>
+
+    <label for="personalColumn">Personal LinkedIn Column</label>
+    <select id="personalColumn">
+      <option value="">Select Column</option>
+    </select>
+
+    <label for="companyColumn">Company LinkedIn Column</label>
+    <select id="companyColumn">
+      <option value="">Select Column</option>
+    </select>
+
+    <label for="emailColumn">Email Column</label>
+    <select id="emailColumn">
+      <option value="">Select Column</option>
+    </select>
+
+    <!-- Auto-Push Settings Section -->
+    <div class="auto-push-section">
+      <div class="section-header">
+        <span class="settings-icon">⚙️</span>
+        <label>Auto-Push Settings</label>
+      </div>
+      <div class="auto-push-controls">
+        <div class="setting-row">
+          <label for="autoPushInterval" class="setting-label">Push to sheets every</label>
+          <select id="autoPushInterval" class="interval-select">
+            <option value="5">5 records</option>
+            <option value="10" selected>10 records</option>
+            <option value="15">15 records</option>
+            <option value="20">20 records</option>
+            <option value="25">25 records</option>
+          </select>
+        </div>
+        <div class="auto-push-status" id="autoPushStatus">
+          <span class="push-indicator">📊</span>
+          <span class="push-text" id="pushProgressText">0/10 until next auto-push</span>
+        </div>
+      </div>
+      <div class="setting-description">
+        Data automatically saves to Google Sheets during scraping
+      </div>
+    </div>
+
+    <!-- Results section with counter and action buttons -->
+    <div class="results-section hidden" id="resultsSection">
+      <div class="results-header">
+        <span class="results-counter" id="resultsCounter">Results: 0</span>
+        <div>
+          <button class="download-results" id="downloadBtn">Download JSON</button>
+          <button class="clear-results" id="clearBtn">Clear</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Control buttons -->
+    <div class="button-group">
+      <button id="pauseBtn" disabled>Pause Scraping</button>
+      <button id="pushBtn" disabled>Push to Sheets</button>
+      <button id="enrichBtn" class="primary">Enrich Data</button>
+    </div>
+
+    <!-- Instructions -->
+    <div class="instructions">
+      <strong>Instructions:</strong><br>
+      1. Enter public Google Sheet URL<br>
+      2. Select LinkedIn profile column<br>
+      3. Configure auto-push interval (optional)<br>
+      4. Click "Enrich Data" to scrape profiles<br>
+      5. Data auto-saves every N records<br>
+      6. Use "Pause" to pause, "Resume" to continue<br>
+      7. "Push to Sheets" for manual save
+    </div>
+  </div>
+  
+  <script src="popup.js"></script>
