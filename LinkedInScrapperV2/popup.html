@@ -38,6 +38,12 @@
           <option value="">Select Column</option>
         </select>
       </div>
+      <div class="form-group">
+        <label for="websiteColumn">Company Website Column</label>
+        <select id="websiteColumn">
+          <option value="">Select Column</option>
+        </select>
+      </div>
 
       <div class="form-group">
         <label for="emailColumn">Email Column</label>
@@ -103,8 +109,13 @@
       </button>
       <button id="enrichBtn" class="primary">
         <span class="btn-icon">✨</span>
-        Enrich Data
+        Scrape LinkedIn
       </button>
+      <div class="form-group">
+        <button id="startWebsiteScraping" class="btn btn-primary">
+          🌐 Start Website Scraping
+        </button>
+      </div>
     </div>
 
     <!-- Instructions -->
@@ -124,7 +135,8 @@
       </ol>
     </div>
   </div>
-  
+
   <script src="popup.js"></script>
 </body>
+
 </html>

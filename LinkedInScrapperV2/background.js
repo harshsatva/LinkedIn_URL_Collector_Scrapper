@@ -82,6 +82,7 @@ console.log("🔧 Background script loaded");
 
 let isScrapingActive = false;
 let scrapingResults = [];
+let scrapingResultWebsites = [];
 let currentProfileIndex = 0;
 let totalProfiles = 0;
 let profileUrls = [];
@@ -89,17 +90,103 @@ let activeTabId = null;
 let isPaused = false;
 let scrapingState = "idle";
 
-// Auto-push configuration
 let autoPushInterval = 10;
 let lastPushIndex = 0;
 
-// FIXED: Prevent duplicate message handling
 let isProcessingStartScraping = false;
 
 chrome.runtime.onMessage.addListener(async (request, sender, sendResponse) => {
     console.log("📥 Background received message:", request.action);
 
-    if (request.action === "startScraping") {
+    if (request.action === "startWebsiteScraping") {
+        console.log("🌐 Starting website scraping for", request.websites?.length || 0, "sites");
+
+        if (!request.websites || !request.websites.length) {
+            console.error("❌ No websites provided");
+            sendResponse({ status: "error", message: "No websites provided" });
+            return;
+        }
+
+        (async () => {
+            let successCount = 0;
+            let errorCount = 0;
+            const results = [];
+            const errors = []; 
+
+            const totalSites = request.websites.length;
+            console.log(`📊 Processing ${totalSites} websites...`);
+
+            for (let i = 0; i < request.websites.length; i++) {
+                const site = request.websites[i];
+
+                try {
+                    console.log(`🔄 Processing site ${i + 1}/${totalSites}: ${site}`);
+
+                    // Apply rate limiting
+                    await rateLimiter.waitForSlot();
+
+                    const html = await fetchSiteHTML(site);
+                    const data = extractWebsiteData(html, site);
+
+                    results.push(data);
+
+                    if (data.status === 'success') {
+                        successCount++;
+                        console.log(`✅ Success for ${site}: Found ${data.emails?.length || 0} emails, ${data.phones?.length || 0} phones`);
+                        scrapingResults.push(data);
+                        console.log(data);
+                        await pushWebsiteDataToSheets();
+                        lastPushIndex = scrapingResults.length;
+                    } else {
+                        errorCount++;
+                        errors.push(`${site}: ${data.error}`);
+                        console.error(`❌ Failed to extract data from: ${site}`, data.error);
+                    }
+
+                } catch (err) {
+                    errorCount++;
+                    const errorMsg = `${site}: ${err.message}`;
+                    errors.push(errorMsg);
+                    console.error(`❌ Error processing site: ${site}`, {
+                        message: err.message,
+                        stack: err.stack
+                    });
+
+                    results.push({
+                        url: site,
+                        status: 'error',
+                        error: err.message,
+                        scrapedAt: new Date().toISOString()
+                    });
+                }
+
+                // Progress update (if you have a way to send progress back to popup)
+                const progress = Math.round(((i + 1) / totalSites) * 100);
+                console.log(`📊 Progress: ${progress}% (${i + 1}/${totalSites})`);
+            }
+
+            const finalStatus = {
+                status: "completed",
+                total: totalSites,
+                successful: successCount,
+                failed: errorCount,
+                results: results,
+                errors: errors // Include detailed errors for debugging
+            };
+
+            console.log("🏁 Website scraping completed:", finalStatus);
+
+            // Log detailed error summary
+            if (errors.length > 0) {
+                console.log("❌ Detailed errors:", errors);
+            }
+
+            sendResponse(finalStatus);
+        })();
+
+        return true;
+    }
+    else if (request.action === "startScraping") {
         console.log("🚀 Processing startScraping request...");
 
         // FIXED: Prevent duplicate processing
@@ -115,7 +202,6 @@ chrome.runtime.onMessage.addListener(async (request, sender, sendResponse) => {
             return true;
         }
 
-        // FIXED: Set processing flag
         isProcessingStartScraping = true;
 
         try {
@@ -137,18 +223,16 @@ chrome.runtime.onMessage.addListener(async (request, sender, sendResponse) => {
                 return true;
             }
 
-            // FIXED: Validate tab synchronously first
             chrome.tabs.get(activeTabId, (tab) => {
                 if (chrome.runtime.lastError) {
                     console.error("❌ Tab not found:", chrome.runtime.lastError);
-                    isProcessingStartScraping = false; // Reset flag
+                    isProcessingStartScraping = false;
                     sendResponse({ status: "error", message: "Invalid tab ID" });
                     return;
                 }
 
                 console.log("✅ Tab verified:", tab.id, tab.url);
 
-                // Check if we're truly resuming vs starting fresh
                 const wasResuming = scrapingState === "paused" && currentProfileIndex > 0;
                 const isStartingFresh = !wasResuming || scrapingResults.length === 0;
 
@@ -162,7 +246,6 @@ chrome.runtime.onMessage.addListener(async (request, sender, sendResponse) => {
                     console.log("▶️ Resuming from paused state at index:", currentProfileIndex);
                 }
 
-                // Update scraping session state
                 isScrapingActive = true;
                 isPaused = false;
                 scrapingState = "scraping";
@@ -170,18 +253,15 @@ chrome.runtime.onMessage.addListener(async (request, sender, sendResponse) => {
                 console.log(`🎯 Scraping state: fresh=${isStartingFresh}, resuming=${wasResuming}`);
                 console.log(`🎯 Will ${isStartingFresh ? 'start' : 'resume'} at profile ${currentProfileIndex + 1}/${totalProfiles}`);
 
-                // Validate before starting
                 if (currentProfileIndex >= profileUrls.length) {
                     console.error("❌ Current index exceeds URL array length");
-                    isProcessingStartScraping = false; // Reset flag
+                    isProcessingStartScraping = false;
                     sendResponse({ status: "error", message: "Invalid profile index" });
                     return;
                 }
 
-                // FIXED: Reset processing flag before starting scraping
                 isProcessingStartScraping = false;
 
-                // Start scraping
                 scrapeNextProfile();
 
                 sendResponse({
@@ -194,11 +274,11 @@ chrome.runtime.onMessage.addListener(async (request, sender, sendResponse) => {
 
         } catch (error) {
             console.error("❌ Error in startScraping:", error);
-            isProcessingStartScraping = false; // Reset flag
+            isProcessingStartScraping = false;
             sendResponse({ status: "error", message: error.message });
         }
 
-        return true; // Keep message channel open for async response
+        return true;
     }
     else if (request.action === "profileScraped") {
         console.log("📊 Profile scraped:", request.profile?.Name || "Unknown");
@@ -423,7 +503,6 @@ async function pushDataToSheets() {
             throw new Error(`Could not determine sheet name for GID ${gid}: ${error.message}`);
         }
 
-        // Now update rows like before
         const rows = sheetData.values || [];
         const headerRow = rows[0];
         const urlIndex = headerRow.indexOf("Person - LinkedIn");
@@ -474,6 +553,241 @@ async function pushDataToSheets() {
     }
 }
 
+const fieldMapping = {
+    addresses: "Address",
+    companyInfo: "Company Info",
+    contactInfo: "Conrtact Info", // typo kept same as sheet
+    description: "Description",
+    emails: "Emails",
+    keywords: "Keywords",
+    phones: "Phones",
+    socials: "Socials",
+    title: "Title",
+    url: "Url"
+};
+
+function normalizeProfile(profile) {
+    const normalized = {};
+    for (const [scrapedKey, sheetHeader] of Object.entries(fieldMapping)) {
+        if (profile[scrapedKey]) {
+            let value = profile[scrapedKey];
+
+            // flatten arrays/objects
+            if (Array.isArray(value)) {
+                value = value.join(" | ");
+            } else if (typeof value === "object") {
+                value = JSON.stringify(value); // you can flatten smarter if needed
+            }
+
+            normalized[sheetHeader] = value;
+        }
+    }
+    return normalized;
+}
+
+async function pushWebsiteDataToSheets() {
+    console.log("📌 Starting push to Google Sheets…");
+
+    if (scrapingResults.length === 0) {
+        throw new Error("No scraped data to push");
+    }
+
+    try {
+        console.log("🔐 Getting access token...");
+        const token = await getAccessToken();
+        if (!token) {
+            throw new Error("Failed to get access token");
+        }
+
+        console.log("🧪 Testing token validity...");
+        const isValid = await testTokenValidity(token);
+        if (!isValid) {
+            console.log("🔄 Token invalid, re-authenticating...");
+            accessToken = null;
+            const newToken = await authenticate();
+            if (!newToken) {
+                throw new Error("Re-authentication failed");
+            }
+        }
+
+        // Load sheetId and gid from storage
+        const { sheetId, gid } = await new Promise(resolve =>
+            chrome.storage.local.get(["sheetId", "gid"], resolve)
+        );
+
+        if (!sheetId || !gid) {
+            throw new Error("Missing sheet ID or GID in storage");
+        }
+
+        // ✅ Dynamically resolve the sheet name using metadata
+        let workingSheetName = null;
+        let sheetData = null;
+
+        try {
+            console.log(`🔍 Getting spreadsheet metadata for GID: ${gid}`);
+
+            const metadataResponse = await fetch(
+                `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}?fields=sheets.properties`,
+                {
+                    method: "GET",
+                    headers: {
+                        Authorization: `Bearer ${await getAccessToken()}`,
+                        "Content-Type": "application/json"
+                    }
+                }
+            );
+
+            if (!metadataResponse.ok) {
+                throw new Error(`Failed to get spreadsheet metadata: ${metadataResponse.status}`);
+            }
+
+            const metadata = await metadataResponse.json();
+            console.log("📊 Spreadsheet metadata:", metadata);
+
+            const targetSheet = metadata.sheets.find(
+                sheet => sheet.properties.sheetId.toString() === gid.toString()
+            );
+
+            if (!targetSheet) {
+                throw new Error(`Sheet with GID ${gid} not found`);
+            }
+
+            workingSheetName = targetSheet.properties.title;
+            console.log(`✅ Found actual sheet name: "${workingSheetName}" for GID: ${gid}`);
+
+            // Fetch sheet data
+            const sheetRange = `'${workingSheetName}'!A:Z`;
+            const sheetResponse = await fetch(
+                `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent(sheetRange)}?majorDimension=ROWS`,
+                {
+                    method: "GET",
+                    headers: {
+                        Authorization: `Bearer ${await getAccessToken()}`,
+                        "Content-Type": "application/json"
+                    }
+                }
+            );
+
+            if (!sheetResponse.ok) {
+                throw new Error(`Failed to fetch sheet data: ${sheetResponse.status}`);
+            }
+
+            sheetData = await sheetResponse.json();
+            console.log(`✅ Successfully fetched data from sheet: "${workingSheetName}"`);
+        } catch (error) {
+            console.error("❌ Error getting dynamic sheet name:", error);
+            throw new Error(`Could not determine sheet name for GID ${gid}: ${error.message}`);
+        }
+
+        const rows = sheetData.values || [];
+        const headerRow = rows[0];
+        const urlIndex = headerRow.indexOf("Organization - Website");
+
+        if (urlIndex === -1) {
+            throw new Error("'Person - LinkedIn' column not found in sheet headers");
+        }
+
+        const columnsToUpdate = [
+            "Address", "Company Info", "Conrtact Info", "Description", "Emails", "Keywords", "Phones", "Socials",
+            "Title", "Url"
+        ];
+
+        for (const profile of scrapingResults) {
+            const matchIndex = rows.findIndex(
+                (r, i) => i > 0 && r[urlIndex] && r[urlIndex].trim() === profile["url"]?.trim()
+            );
+
+            if (matchIndex === -1) continue;
+
+            let currentRow = [...rows[matchIndex]];
+            while (currentRow.length < headerRow.length) {
+                currentRow.push("");
+            }
+
+            let updatesCount = 0;
+            const normalizedProfile = normalizeProfile(profile);
+
+            headerRow.forEach((header, colIndex) => {
+                if (columnsToUpdate.includes(header) && normalizedProfile[header]) {
+                    if (currentRow[colIndex] !== normalizedProfile[header]) {
+                        currentRow[colIndex] = normalizedProfile[header];
+                        updatesCount++;
+                    }
+                }
+            });
+
+
+            if (updatesCount > 0) {
+                const lastCol = String.fromCharCode(65 + headerRow.length - 1);
+                const updateRange = `'${workingSheetName}'!A${matchIndex + 1}:${lastCol}${matchIndex + 1}`;
+                await updateSheet(sheetId, updateRange, [currentRow]);
+                await new Promise(resolve => setTimeout(resolve, 500));
+            }
+        }
+
+        console.log("✅ Push to sheets completed successfully!");
+    } catch (error) {
+        console.error("❌ Error in push to sheets:", error);
+        throw error;
+    }
+}
+
+async function getSheetData(sheetId, gid) {
+    console.log(`🔍 Getting spreadsheet metadata for GID: ${gid}`);
+
+    const metadataResponse = await fetch(
+        `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}?fields=sheets.properties`,
+        {
+            method: "GET",
+            headers: {
+                Authorization: `Bearer ${await getAccessToken()}`,
+                "Content-Type": "application/json"
+            }
+        }
+    );
+
+    if (!metadataResponse.ok) {
+        throw new Error(`Failed to get spreadsheet metadata: ${metadataResponse.status}`);
+    }
+
+    const metadata = await metadataResponse.json();
+    console.log("📊 Spreadsheet metadata:", metadata);
+
+    const targetSheet = metadata.sheets.find(
+        sheet => sheet.properties.sheetId.toString() === gid.toString()
+    );
+
+    if (!targetSheet) {
+        throw new Error(`Sheet with GID ${gid} not found`);
+    }
+
+    const workingSheetName = targetSheet.properties.title;
+    console.log(`✅ Found actual sheet name: "${workingSheetName}" for GID: ${gid}`);
+
+    const sheetRange = `'${workingSheetName}'!A:Z`;
+    const sheetResponse = await fetch(
+        `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent(sheetRange)}?majorDimension=ROWS`,
+        {
+            method: "GET",
+            headers: {
+                Authorization: `Bearer ${await getAccessToken()}`,
+                "Content-Type": "application/json"
+            }
+        }
+    );
+
+    if (!sheetResponse.ok) {
+        throw new Error(`Failed to fetch sheet data: ${sheetResponse.status}`);
+    }
+
+    const sheetData = await sheetResponse.json();
+    console.log(`✅ Successfully fetched data from sheet: "${workingSheetName}"`);
+
+    const rows = sheetData.values || [];
+    const headerRow = rows[0] || [];
+
+    return { workingSheetName, rows, headerRow };
+}
 
 let currentTabListener = null;
 
@@ -489,7 +803,6 @@ function scrapeNextProfile() {
         return;
     }
 
-    // FIXED: Clean up any existing listener first
     if (currentTabListener) {
         chrome.tabs.onUpdated.removeListener(currentTabListener);
         currentTabListener = null;
@@ -565,21 +878,16 @@ function scrapeNextProfile() {
 let processingProfileIndex = -1; // Track which profile is currently being processed
 
 function handleProfileResult(profile, url) {
-    // FIXED: Prevent duplicate processing of the same profile
     if (processingProfileIndex === currentProfileIndex) {
         console.log(`⚠️ Duplicate result for profile ${currentProfileIndex + 1}, ignoring...`);
         return;
     }
-
-    // Mark this profile as being processed
     processingProfileIndex = currentProfileIndex;
 
     scrapingResults.push(profile);
     console.log(`✅ Profile ${currentProfileIndex + 1}/${totalProfiles} processed: ${profile.Name || 'Unknown'}`);
 
     const recordsSinceLastPush = scrapingResults.length - lastPushIndex;
-
-    // Handle auto-push logic
     if (recordsSinceLastPush >= autoPushInterval) {
         chrome.runtime.sendMessage({
             action: "autoPushStarted",
@@ -618,10 +926,8 @@ function handleProfileResult(profile, url) {
                 continueToNextProfile();
             });
     } else {
-        // No auto-push needed, increment and continue
         currentProfileIndex++;
-        processingProfileIndex = -1; // Reset processing flag
-
+        processingProfileIndex = -1;
         chrome.runtime.sendMessage({
             action: "scrapingProgress",
             currentIndex: currentProfileIndex,
@@ -738,4 +1044,300 @@ async function updateSheet(spreadsheetId, range, values) {
     const result = await response.json();
     console.log("✅ Sheet updated successfully:", result);
     return result;
+}
+
+async function fetchSiteHTML(url) {
+    console.log(`🌐 Fetching HTML for: ${url}`);
+
+    // Normalize URL
+    if (!/^https?:\/\//i.test(url)) {
+        url = "https://" + url;
+    }
+
+    // List of proxy services to try (use sparingly and respect rate limits)
+    const proxyServices = [
+        // Direct fetch first
+        null,
+        // Public CORS proxies (use with caution)
+        'https://api.allorigins.win/raw?url=',
+        'https://cors-anywhere.herokuapp.com/',
+        'https://api.codetabs.com/v1/proxy?quest='
+    ];
+
+    for (let i = 0; i < proxyServices.length; i++) {
+        const proxy = proxyServices[i];
+        const fetchUrl = proxy ? `${proxy}${encodeURIComponent(url)}` : url;
+
+        try {
+            console.log(`🔄 Attempt ${i + 1}: ${proxy ? 'Using proxy' : 'Direct fetch'} for ${url}`);
+
+            const response = await fetch(fetchUrl, {
+                method: 'GET',
+                headers: {
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                    ...(proxy && { 'X-Requested-With': 'XMLHttpRequest' })
+                },
+                mode: proxy ? 'cors' : 'no-cors'
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+
+            const html = await response.text();
+
+            if (!html || html.length < 100) {
+                throw new Error('Received empty or too short HTML content');
+            }
+
+            console.log(`✅ Success with ${proxy ? 'proxy' : 'direct fetch'}: ${url} (${html.length} chars)`);
+            return html;
+
+        } catch (error) {
+            console.warn(`⚠️ Attempt ${i + 1} failed for ${url}:`, error.message);
+
+            // If this is the last attempt and we still haven't tried content script
+            if (i === proxyServices.length - 1) {
+                console.log(`🔄 Trying content script fallback for: ${url}`);
+                return await fetchViaContentScript(url);
+            }
+
+            // Add delay between proxy attempts
+            await new Promise(resolve => setTimeout(resolve, 1000));
+        }
+    }
+
+    throw new Error(`All fetch attempts failed for: ${url}`);
+}
+
+class RateLimiter {
+    constructor(maxRequests = 5, timeWindow = 10000) {
+        this.requests = [];
+        this.maxRequests = maxRequests;
+        this.timeWindow = timeWindow;
+    }
+
+    async waitForSlot() {
+        const now = Date.now();
+
+        // Remove old requests outside the time window
+        this.requests = this.requests.filter(time => now - time < this.timeWindow);
+
+        // If we're at the limit, wait
+        if (this.requests.length >= this.maxRequests) {
+            const oldestRequest = Math.min(...this.requests);
+            const waitTime = this.timeWindow - (now - oldestRequest) + 100; // Add 100ms buffer
+
+            console.log(`⏳ Rate limit reached, waiting ${waitTime}ms`);
+            await new Promise(resolve => setTimeout(resolve, waitTime));
+
+            return this.waitForSlot(); // Recursive call after waiting
+        }
+
+        this.requests.push(now);
+    }
+}
+
+const rateLimiter = new RateLimiter(3, 10000);
+
+async function fetchViaContentScript(url) {
+    console.log(`🔄 Trying content script fallback for: ${url}`);
+
+    try {
+        // Create or reuse a tab
+        const tab = await chrome.tabs.create({ url, active: false });
+
+        // Wait for page to load
+        await new Promise((resolve) => {
+            const listener = (tabId, changeInfo) => {
+                if (tabId === tab.id && changeInfo.status === 'complete') {
+                    chrome.tabs.onUpdated.removeListener(listener);
+                    resolve();
+                }
+            };
+            chrome.tabs.onUpdated.addListener(listener);
+        });
+
+        // Inject content script to get HTML
+        const results = await chrome.scripting.executeScript({
+            target: { tabId: tab.id },
+            function: () => document.documentElement.outerHTML
+        });
+
+        // Close the tab
+        await chrome.tabs.remove(tab.id);
+
+        const html = results[0]?.result || '';
+        console.log(`✅ Content script fallback successful for: ${url} (${html.length} chars)`);
+        return html;
+
+    } catch (error) {
+        console.error(`❌ Content script fallback failed for ${url}:`, error);
+        throw error;
+    }
+}
+
+function extractWebsiteData(html, url) {
+    console.log(`🔍 Extracting data from: ${url}`);
+
+    try {
+        if (!html || html.length === 0) {
+            throw new Error('Empty HTML content received');
+        }
+
+        console.log(`📊 Parsing HTML content (${html.length} chars) for: ${url}`);
+
+        // Extract emails (improved regex)
+        const emailRegex = /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b/g;
+        const emails = [...new Set(html.match(emailRegex) || [])];
+        console.log(`📧 Found ${emails.length} emails:`, emails.slice(0, 3));
+
+        // Extract phone numbers (improved regex for various formats)
+        const phoneRegex = /(?:\+?1[-.\s]?)?(?:\(?[0-9]{3}\)?[-.\s]?)?[0-9]{3}[-.\s]?[0-9]{4}/g;
+        const phones = [...new Set(html.match(phoneRegex) || [])];
+        console.log(`📞 Found ${phones.length} phones:`, phones.slice(0, 2));
+
+        // Extract social media links using regex
+        const socialPlatforms = {
+            linkedin: /https?:\/\/(www\.)?linkedin\.com\/[^\s"'<>\)]+/gi,
+            twitter: /https?:\/\/(www\.)?(twitter\.com|x\.com)\/[^\s"'<>\)]+/gi,
+            facebook: /https?:\/\/(www\.)?facebook\.com\/[^\s"'<>\)]+/gi,
+            instagram: /https?:\/\/(www\.)?instagram\.com\/[^\s"'<>\)]+/gi,
+            youtube: /https?:\/\/(www\.)?youtube\.com\/[^\s"'<>\)]+/gi,
+            tiktok: /https?:\/\/(www\.)?tiktok\.com\/[^\s"'<>\)]+/gi
+        };
+
+        const socials = {};
+        for (const [platform, regex] of Object.entries(socialPlatforms)) {
+            const matches = html.match(regex) || [];
+            if (matches.length > 0) {
+                socials[platform] = [...new Set(matches)];
+            }
+        }
+        console.log(`🔗 Found social links:`, Object.keys(socials));
+
+        // Extract title using regex
+        const titleMatch = html.match(/<title[^>]*>([^<]+)<\/title>/i);
+        const title = titleMatch ? titleMatch[1].trim() : '';
+        console.log(`📄 Found title: ${title}`);
+
+        // Extract meta description using regex
+        const metaDescRegex = /<meta\s+name=['"]description['"][^>]*content=['"]([^'"]*)['"]/i;
+        const metaDescMatch = html.match(metaDescRegex);
+        let description = metaDescMatch ? metaDescMatch[1] : '';
+
+        // If no meta description, try to find first meaningful paragraph
+        if (!description) {
+            const pRegex = /<p[^>]*>([^<]+(?:<[^p][^>]*>[^<]*<\/[^p][^>]*>[^<]*)*)<\/p>/gi;
+            const pMatches = html.match(pRegex);
+
+            if (pMatches) {
+                for (const pMatch of pMatches) {
+                    // Remove HTML tags from paragraph content
+                    const textContent = pMatch.replace(/<[^>]+>/g, '').trim();
+                    if (textContent.length > 50) {
+                        description = textContent.substring(0, 200) + '...';
+                        break;
+                    }
+                }
+            }
+        }
+        console.log(`📝 Found description: ${description.substring(0, 100)}...`);
+
+        // Extract address information (common patterns)
+        const addressPatterns = [
+            /\d+\s+[A-Za-z\s]+(?:Street|St|Avenue|Ave|Road|Rd|Boulevard|Blvd|Lane|Ln|Drive|Dr|Court|Ct|Way|Place|Pl)[^.]*(?:\d{5}|\w{2,3}\s+\d{3,5})/gi,
+            /(?:Address|Located at|Location)[:\s]+([^<\n]+)/gi
+        ];
+
+        let addresses = [];
+        for (const pattern of addressPatterns) {
+            const matches = html.match(pattern) || [];
+            addresses = addresses.concat(matches);
+        }
+        addresses = [...new Set(addresses)].slice(0, 3); // Limit to 3 unique addresses
+
+        // Extract contact information patterns
+        const contactPatterns = {
+            fax: /(?:fax|facsimile)[:\s]*(?:\+?1[-.\s]?)?(?:\(?[0-9]{3}\)?[-.\s]?)?[0-9]{3}[-.\s]?[0-9]{4}/gi,
+            toll_free: /(?:toll.free|1-800|1-888|1-877|1-866)[:\s-]*[0-9-\s()]+/gi
+        };
+
+        const contactInfo = {};
+        for (const [type, regex] of Object.entries(contactPatterns)) {
+            const matches = html.match(regex) || [];
+            if (matches.length > 0) {
+                contactInfo[type] = [...new Set(matches)].slice(0, 2);
+            }
+        }
+
+        // Extract important page keywords for classification
+        const businessKeywords = {
+            saas: /\b(?:saas|software as a service|cloud software|subscription|API|platform|dashboard|analytics|CRM|ERP|automation)\b/gi,
+            service: /\b(?:consulting|services|solutions|support|implementation|training|maintenance|professional services|managed services)\b/gi,
+            industry: /\b(?:healthcare|finance|retail|manufacturing|education|real estate|logistics|construction|legal|accounting)\b/gi
+        };
+
+        const keywords = {};
+        for (const [category, regex] of Object.entries(businessKeywords)) {
+            const matches = html.match(regex) || [];
+            if (matches.length > 0) {
+                keywords[category] = [...new Set(matches.map(m => m.toLowerCase()))];
+            }
+        }
+
+        // Extract company information
+        const companyInfoRegex = {
+            founded: /(?:founded|established|since)[:\s]+(\d{4})/gi,
+            employees: /(?:employees|team members|staff)[:\s]+(\d+[\d,]*)/gi,
+            headquarters: /(?:headquarters|headquartered|based in|located in)[:\s]+([^<\n.]+)/gi
+        };
+
+        const companyInfo = {};
+        for (const [key, regex] of Object.entries(companyInfoRegex)) {
+            const match = html.match(regex);
+            if (match && match[1]) {
+                companyInfo[key] = match[1].trim();
+            }
+        }
+
+        const result = {
+            url,
+            title: title.substring(0, 100),
+            description: description.substring(0, 300),
+            emails: emails.slice(0, 5),
+            phones: phones.slice(0, 3),
+            socials,
+            addresses,
+            contactInfo,
+            keywords,
+            companyInfo,
+            scrapedAt: new Date().toISOString(),
+            status: 'success'
+        };
+
+        console.log(`✅ Successfully extracted data from: ${url}`, {
+            title: result.title,
+            emailCount: result.emails.length,
+            phoneCount: result.phones.length,
+            socialCount: Object.keys(result.socials).length,
+            keywordCategories: Object.keys(result.keywords)
+        });
+
+        return result;
+
+    } catch (error) {
+        console.error(`❌ Error extracting data from ${url}:`, {
+            message: error.message,
+            name: error.name,
+            stack: error.stack
+        });
+
+        return {
+            url,
+            status: 'error',
+            error: error.message,
+            scrapedAt: new Date().toISOString()
+        };
+    }
 }

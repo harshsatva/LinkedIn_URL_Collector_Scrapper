@@ -63,7 +63,7 @@ function parseCsv(csvText) {
 function populateDropdowns(headers) {
   console.log("📊 Headers detected:", headers);
 
-  const dropdownIds = ["personalColumn", "companyColumn", "emailColumn"];
+  const dropdownIds = ["personalColumn", "companyColumn", "websiteColumn", "emailColumn"];
 
   dropdownIds.forEach(id => {
     const select = document.getElementById(id);
@@ -91,30 +91,43 @@ function populateDropdowns(headers) {
 }
 
 function checkIfRowAlreadyScraped(row, headers) {
-  // Define columns that indicate the profile has been scraped
   const indicatorColumns = [
     "Designation",
     "Current Position",
     "Experience",
     "Education",
-    "About"  // You can adjust these based on your needs
+    "About"
   ];
 
-  // Check if any of the indicator columns have data
   for (const columnName of indicatorColumns) {
     const columnIndex = headers.indexOf(columnName);
 
     if (columnIndex !== -1 && columnIndex < row.length) {
       const cellValue = row[columnIndex];
 
-      // If the cell has meaningful data (not empty, not just whitespace)
       if (cellValue && cellValue.toString().trim().length > 0) {
-        return true; // Row is already scraped
+        return true;
       }
     }
   }
 
-  return false; // Row needs to be scraped
+  return false;
+}
+
+function createProgressElements() {
+  const progressHTML = `
+        <div id="websiteProgress" style="display: none; margin-top: 10px;">
+            <div class="progress-bar">
+                <div id="websiteProgressFill" class="progress-fill"></div>
+            </div>
+            <div id="websiteProgressText" class="progress-text">Processing...</div>
+        </div>
+    `;
+
+  const button = document.getElementById("startWebsiteScraping");
+  if (button && !document.getElementById("websiteProgress")) {
+    button.insertAdjacentHTML('afterend', progressHTML);
+  }
 }
 
 function extractLinkedInUrls() {
@@ -348,6 +361,129 @@ document.getElementById("sheetUrl").addEventListener("change", async (e) => {
   } catch (err) {
     console.error("❌ Fetch/Parsing error:", err);
     updateStatus("Error loading", true);
+  }
+});
+
+document.getElementById("startWebsiteScraping").addEventListener("click", async () => {
+  const websiteColumn = document.getElementById("websiteColumn").value;
+  const button = document.getElementById("startWebsiteScraping");
+
+  if (!websiteColumn) {
+    alert("❌ Please select a website column first!");
+    return;
+  }
+
+  if (!currentSheetData || currentSheetData.length === 0) {
+    alert("❌ No sheet data loaded. Please load a sheet first!");
+    return;
+  }
+
+  const headers = currentSheetData[0];
+  const colIndex = headers.indexOf(websiteColumn);
+
+  if (colIndex === -1) {
+    console.error("❌ Column not found in headers");
+    alert("❌ Selected column not found in sheet headers!");
+    return;
+  }
+
+  // Regular expression to validate URLs
+  const urlRegex = /^(https?:\/\/)?([\da-z.-]+)\.([a-z.]{2,6})([\/\w .-]*)*\/?$/;
+
+  const websites = [];
+  for (let i = 1; i < currentSheetData.length; i++) {
+    const row = currentSheetData[i];
+    const site = row[colIndex]?.trim(); // Safely access and trim the website column value
+    if (site && site !== "N/A" && site !== "-" && urlRegex.test(site)) {
+      websites.push(site);
+    }
+  }
+
+  if (websites.length === 0) {
+    alert("❌ No valid websites found in the selected column!");
+    return;
+  }
+
+  if (websites.length === 0) {
+    alert("❌ No valid websites found in the selected column!");
+    return;
+  }
+
+  console.log("🌐 Extracted websites:", websites);
+
+  const confirmMessage = `🌐 Found ${websites.length} websites to scrape.\n\nThis may take ${Math.ceil(websites.length * 2)} seconds.\n\nProceed?`;
+  if (!confirm(confirmMessage)) return;
+
+  button.disabled = true;
+  button.textContent = "🔄 Scraping Websites...";
+
+  createProgressElements();
+  const progressContainer = document.getElementById("websiteProgress");
+  const progressFill = document.getElementById("websiteProgressFill");
+  const progressText = document.getElementById("websiteProgressText");
+
+  if (progressContainer) {
+    progressContainer.style.display = "block";
+    progressText.textContent = `Starting to scrape ${websites.length} websites...`;
+  }
+
+  try {
+    const response = await new Promise((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        reject(new Error("Scraping timed out after 5 minutes"));
+      }, 300000);
+
+      chrome.runtime.sendMessage(
+        { action: "startWebsiteScraping", websites },
+        (response) => {
+          clearTimeout(timeout);
+          if (chrome.runtime.lastError) {
+            reject(new Error(chrome.runtime.lastError.message));
+          } else {
+            resolve(response);
+          }
+        }
+      );
+    });
+
+    console.log("🌐 Website scraping response:", response);
+
+    if (response.status === "completed") {
+      if (progressFill) progressFill.style.width = "100%";
+      if (progressText) {
+        progressText.textContent = `✅ Completed! ${response.successful}/${response.total} sites scraped successfully`;
+      }
+
+      const successMsg = `✅ Website scraping completed!\n\n` +
+        `• Total sites: ${response.total}\n` +
+        `• Successful: ${response.successful}\n` +
+        `• Failed: ${response.failed}\n\n` +
+        `Data has been saved to your Google Sheet!`;
+
+      alert(successMsg);
+
+    } else if (response.status === "error") {
+      throw new Error(response.message || "Unknown error occurred");
+    }
+
+  } catch (error) {
+    console.error("❌ Website scraping error:", error);
+
+    if (progressText) {
+      progressText.textContent = `❌ Error: ${error.message}`;
+    }
+
+    alert(`❌ Error during website scraping:\n${error.message}`);
+
+  } finally {
+    button.disabled = false;
+    button.textContent = "🌐 Start Website Scraping";
+
+    setTimeout(() => {
+      if (progressContainer) {
+        progressContainer.style.display = "none";
+      }
+    }, 3000);
   }
 });
 
