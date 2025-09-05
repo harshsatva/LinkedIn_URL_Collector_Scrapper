@@ -539,7 +539,7 @@ function scrapeNextProfile() {
                             console.log("✅ Scrape command sent successfully");
                         }
                     });
-                }, 500);
+                }, 2000);
             }
         };
 
@@ -558,11 +558,10 @@ function scrapeNextProfile() {
 
                 handleProfileResult(timeoutProfile, url);
             }
-        }, 3000);
+        }, 2000);
     });
 }
 
-// Add this variable at the top with other global variables
 let processingProfileIndex = -1; // Track which profile is currently being processed
 
 function handleProfileResult(profile, url) {
